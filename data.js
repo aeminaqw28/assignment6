@@ -1,6 +1,8 @@
 var party = [
   {
-    id: 'balcony', name: 'Balcony', floor: 2,
+    id: 'balcony',
+    name: 'Balcony',
+    floor: 2,
     guests: [
       { name: 'Aigerim', color: 'green', time: '20:45', aitu: true, things: ['cup', 'crumbs'] },
       { name: 'Aliya', color: 'black', time: '21:15', aitu: false, things: ['phone', 'cup'] },
@@ -9,7 +11,9 @@ var party = [
     ]
   },
   {
-    id: 'hall', name: 'Hall', floor: 2,
+    id: 'hall',
+    name: 'Hall',
+    floor: 2,
     guests: [
       { name: 'Arman', color: 'yellow', time: '20:35', aitu: false, things: ['bag', 'glasses'] },
       { name: 'Sophia', color: 'purple', time: '21:20', aitu: true, things: ['phone'] },
@@ -20,7 +24,9 @@ var party = [
     ]
   },
   {
-    id: 'kitchen', name: 'Kitchen', floor: 1,
+    id: 'kitchen',
+    name: 'Kitchen',
+    floor: 1,
     guests: [
       { name: 'Nurlan', color: 'red', time: '19:40', aitu: true, things: ['phone', 'cup'] },
       { name: 'Emma', color: 'black', time: '20:15', aitu: false, things: ['bag'] },
@@ -31,7 +37,9 @@ var party = [
     ]
   },
   {
-    id: 'living', name: 'Living room', floor: 1,
+    id: 'living',
+    name: 'Living room',
+    floor: 1,
     guests: [
       { name: 'Daniel', color: 'blue', time: '19:55', aitu: true, things: ['glasses'] },
       { name: 'Zarina', color: 'green', time: '21:10', aitu: false, things: ['bag', 'phone', 'crumbs'] },

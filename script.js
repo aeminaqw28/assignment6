@@ -1,14 +1,18 @@
 var ICONS = { phone: '📱', glasses: '👓', bag: '👜', cup: '☕', crumbs: '🍰' };
+var NAMES = { phone: 'a phone', glasses: 'glasses', bag: 'a bag', cup: 'a cup', crumbs: 'cake crumbs' };
 var MIRAS = { name: 'Miras', color: 'blue', time: '21:20', aitu: true, things: ['phone'] };
+var sorted = {};
+var $card = null;
+var $openGuest = null;
 
 function toMin(t) {
   var p = t.split(':');
   return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
 }
 
-function makeCard(g, room) {
+function makeCard(g, room, pos) {
   var classes = ['guest', g.color, g.aitu ? 'aitu' : 'not-aitu'].concat(g.things).join(' ');
-  var $card = $('<div>').addClass(classes).attr({
+  var $c = $('<div>').addClass(classes).attr({
     'data-name': g.name,
     'data-color': g.color,
     'data-time': g.time,
@@ -16,11 +20,12 @@ function makeCard(g, room) {
     'data-aitu': String(g.aitu),
     'data-things': g.things.join(','),
     'data-room': room.id,
-    'data-floor': room.floor
+    'data-floor': room.floor,
+    'data-pos': pos
   });
   var $avatar = $('<img class="avatar">')
     .attr('alt', g.name)
-    .attr('src', 'https://api.dicebear.com/9.x/open-peeps/svg?seed=' + encodeURIComponent(g.seed || g.name));
+    .attr('src', 'https://api.dicebear.com/9.x/open-peeps/svg?seed=' + encodeURIComponent(g.name));
   var $ring = $('<div class="ring">').append($avatar);
   if (g.aitu) {
     $ring.append($('<span class="badge">').text('🎓'));
@@ -29,11 +34,22 @@ function makeCard(g, room) {
   $.each(g.things, function (i, t) {
     $things.append($('<span class="thing">').text(ICONS[t]));
   });
-  return $card.append($ring, $('<div class="name">').text(g.name), $('<div class="time">').text('◷ ' + g.time), $things);
+  return $c.append($ring, $('<div class="name">').text(g.name), $('<div class="time">').text('◷ ' + g.time), $things);
+}
+
+function killCard() {
+  if ($card) {
+    $card.stop(true).remove();
+  }
+  $card = null;
+  $openGuest = null;
 }
 
 function buildParty() {
+  killCard();
+  $('.fly').stop(true).remove();
   $('#house *').stop(true);
+  sorted = {};
   var $house = $('#house').empty();
   $.each([2, 1], function (i, floor) {
     var $rooms = $('<div class="rooms">');
@@ -41,12 +57,16 @@ function buildParty() {
       if (room.floor !== floor) return;
       var $guests = $('<div class="guests">');
       $.each(room.guests, function (k, g) {
-        $guests.append(makeCard(g, room));
+        $guests.append(makeCard(g, room, k));
       });
       $rooms.append(
         $('<div class="room">')
           .attr({ 'data-room': room.id, 'data-name': room.name, 'data-floor': room.floor })
-          .append($('<h3>').text(room.name), $guests)
+          .append(
+            $('<h3>').text(room.name),
+            $('<button type="button" class="sort">').text('Sort by time'),
+            $guests
+          )
       );
     });
     $house.append(
@@ -138,11 +158,13 @@ var cases = [
   { n: 18, kind: 'change', label: 'Miras comes', title: 'Miras, an AITU student in blue, comes at 21:20 with his phone and joins Askar and Inkar, standing between them.',
     note: ' (new guest, faded in between Askar and Inkar)',
     run: function () {
-      var roomId = $('.guest[data-name="Askar"]').attr('data-room');
+      var $askar = $('.guest[data-name="Askar"]');
+      var roomId = $askar.attr('data-room');
       var room = $.grep(party, function (r) {
         return r.id === roomId;
       })[0];
-      return makeCard(MIRAS, room).hide().insertAfter('.guest[data-name="Askar"]').fadeIn(900);
+      var pos = parseFloat($askar.attr('data-pos')) + 0.5;
+      return makeCard(MIRAS, room, pos).hide().insertAfter($askar).fadeIn(900);
     } },
   { n: 19, kind: 'change', label: 'Natasha leaves', title: 'Natasha says goodbye and goes home.',
     note: ' (card faded out and removed from the page)',
@@ -184,12 +206,144 @@ function showResult(c, $found) {
   );
 }
 
+function spotlight($found, kind) {
+  var $keep = kind === 'rooms' ? $found.find('.guest') : $found;
+  $('#house .guest').not($keep).fadeTo(300, 0.2);
+}
+
+function clearSpotlight() {
+  $('#house .guest').stop(true, true).fadeTo(300, 1);
+  $('#house .found').removeClass('found');
+  $('#cases button').removeClass('active');
+  $('#result').text('Cleared. All guests are bright again.');
+}
+
 function runCase(c) {
   buildParty();
   var $found = c.run();
   showResult(c, $found);
   $found.addClass('found');
-  if (c.kind !== 'change') jump($found);
+  if (c.kind !== 'change') {
+    jump($found);
+    spotlight($found, c.kind);
+  }
+}
+
+function thingsText(arr) {
+  if (!arr.length) return 'Came with nothing';
+  var t = $.map(arr, function (x) {
+    return NAMES[x];
+  });
+  var last = t.pop();
+  return 'Has ' + (t.length ? t.join(', ') + ' and ' + last : last);
+}
+
+function closeCard() {
+  if (!$card) return;
+  var $c = $card;
+  var o = $openGuest.find('.avatar').offset();
+  $card = null;
+  $openGuest = null;
+  $c.stop(true).animate({ left: o.left, top: o.top, width: 64, height: 64, opacity: 0 }, 250, function () {
+    $c.remove();
+  });
+}
+
+function openCard($g) {
+  closeCard();
+  var things = $g.attr('data-things') ? $g.attr('data-things').split(',') : [];
+  var roomId = $g.attr('data-room');
+  var $c = $('<div class="info">').attr('data-name', $g.attr('data-name')).append(
+    $('<h4>').text($g.attr('data-name')),
+    $('<p>').text('Came at ' + $g.attr('data-time')),
+    $('<p>').text($g.attr('data-aitu') === 'true' ? 'AITU student' : 'Not an AITU student'),
+    $('<p>').text('Wears ' + $g.attr('data-color')),
+    $('<p>').text(thingsText(things))
+  );
+  $.each(party, function (i, r) {
+    if (r.id !== roomId) {
+      $c.append($('<button type="button" class="move">').attr('data-to', r.id).text('Move to the ' + r.name.toLowerCase()));
+    }
+  });
+  var w = 240;
+  $c.css({ width: w, height: 'auto', left: -9999, top: 0 }).appendTo('body');
+  var h = $c.outerHeight();
+  var o = $g.find('.avatar').offset();
+  var tx = Math.max(8, Math.min(o.left + 32 - w / 2, $(window).width() - w - 8));
+  $c.css({ left: o.left, top: o.top, width: 64, height: 64, opacity: 0.3 })
+    .animate({ left: tx, top: o.top + 70, width: w, height: h, opacity: 1 }, 300);
+  $card = $c;
+  $openGuest = $g;
+}
+
+function applyOrder(id) {
+  var $box = $('.room[data-room="' + id + '"] .guests');
+  var $cards = $box.children('.guest').not('.moving');
+  var before = {};
+  $cards.each(function () {
+    var $c = $(this).stop(true, true);
+    before[$c.attr('data-name')] = $c.offset();
+  });
+  var list = $cards.get().sort(function (a, b) {
+    var A = $(a), B = $(b);
+    var byPos = parseFloat(A.attr('data-pos')) - parseFloat(B.attr('data-pos'));
+    if (sorted[id]) {
+      return (parseInt(A.attr('data-min'), 10) - parseInt(B.attr('data-min'), 10)) || byPos;
+    }
+    return byPos;
+  });
+  $.each(list, function () {
+    $box.append(this);
+  });
+  $cards.each(function () {
+    var $c = $(this).css({ left: 0, top: 0 });
+    var b = before[$c.attr('data-name')];
+    var a = $c.offset();
+    $c.css({ left: b.left - a.left, top: b.top - a.top }).animate({ left: 0, top: 0 }, 500);
+  });
+}
+
+function moveGuest(name, toId) {
+  var $g = $('#house .guest[data-name="' + name + '"]').not('.moving');
+  if (!$g.length || $g.attr('data-room') === toId) return;
+  var fromId = $g.attr('data-room');
+  var fromRoom = $.grep(party, function (r) {
+    return r.id === fromId;
+  })[0];
+  var toRoom = $.grep(party, function (r) {
+    return r.id === toId;
+  })[0];
+  var idx = -1;
+  $.each(fromRoom.guests, function (i, x) {
+    if (x.name === name) idx = i;
+  });
+  var g = idx >= 0 ? fromRoom.guests.splice(idx, 1)[0] : {
+    name: name,
+    color: $g.attr('data-color'),
+    time: $g.attr('data-time'),
+    aitu: $g.attr('data-aitu') === 'true',
+    things: $g.attr('data-things') ? $g.attr('data-things').split(',') : []
+  };
+  toRoom.guests.push(g);
+  closeCard();
+  var from = $g.offset();
+  var w = $g.outerWidth();
+  var $new = makeCard(g, toRoom, toRoom.guests.length - 1)
+    .addClass('moving')
+    .css('opacity', $g.css('opacity'))
+    .appendTo($('.room[data-room="' + toId + '"] .guests'));
+  var to = $new.offset();
+  $new.css({ visibility: 'hidden', width: 0, marginRight: -8 });
+  var $fly = $g.clone().addClass('fly').css({ position: 'absolute', left: from.left, top: from.top, width: w, margin: 0 }).appendTo('body');
+  $g.addClass('moving').css('visibility', 'hidden').animate({ width: 0, marginRight: -8 }, 600, function () {
+    $(this).remove();
+  });
+  $new.animate({ width: w, marginRight: 0 }, 600);
+  $fly.animate({ left: to.left, top: to.top }, 700, function () {
+    $fly.remove();
+    $new.css('visibility', 'visible').removeClass('moving');
+    if (sorted[toId]) applyOrder(toId);
+  });
 }
 
 $(function () {
@@ -199,9 +353,28 @@ $(function () {
     );
   });
   buildParty();
+  $('#clear').on('click', clearSpotlight);
   $('#cases').on('click', 'button.case', function () {
     $('#cases button').removeClass('active');
     $(this).addClass('active');
     runCase(cases[$(this).data('case') - 1]);
+  });
+  $('#house').on('click', '.guest', function () {
+    if ($openGuest && $openGuest[0] === this) return;
+    openCard($(this));
+  });
+  $('#house').on('click', '.sort', function () {
+    var id = $(this).closest('.room').attr('data-room');
+    sorted[id] = !sorted[id];
+    applyOrder(id);
+  });
+  $(document).on('keydown', function (e) {
+    if (e.which === 27) closeCard();
+  });
+  $(document).on('click', function (e) {
+    if (!$(e.target).closest('.info, .guest').length) closeCard();
+  });
+  $(document).on('click', '.info .move', function () {
+    moveGuest($(this).closest('.info').attr('data-name'), $(this).attr('data-to'));
   });
 });
